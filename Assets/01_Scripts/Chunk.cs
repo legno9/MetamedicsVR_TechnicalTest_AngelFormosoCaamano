@@ -1,9 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
-using Unity.VisualScripting;
 
-public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk en runtime?
+public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk en runtime? boton
 {
     public struct PathPreviewData
     {
@@ -17,6 +15,7 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         }
     }
 
+    private ChunksManager chunksManager;
     private GameObject terrainPrefab;
     private GameObject pathPrefab;
     private List<PathPreviewData> pathPreview  = new();
@@ -48,9 +47,10 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         }
     }
 
-    public Vector2Int Initialize( Vector2Int chunkDimensions, Vector2Int startPathTile,
-     Vector2Int relativePosition, GameObject terrainType, GameObject pathType)
+    public Vector2Int Initialize( Vector2Int chunkDimensions, Vector2Int startPathTile, Vector2Int relativePosition, GameObject terrainType, GameObject pathType)
     {
+        chunksManager = ChunksManager.Instance;
+
         pathStart = startPathTile;
         chunkRelativePosition = relativePosition;
 
@@ -66,7 +66,7 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         pathPrefab = pathType;
 
         startEdge = GetTileEdge(pathStart);
-
+        
         GeneratePath();
         FillChunk();
         
@@ -89,13 +89,13 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
             pathPreview.Add(currentDataPath);
             pathPreviewHashset.Add(currentDataPath.position);
               
-            if (lastPathReached){{pathEnd = currentDataPath.position;}}
+            if (lastPathReached){pathEnd = currentDataPath.position; return;}
 
             PathPreviewData? nextDataPath = GetNextDataPath(currentDataPath);
 
             while (nextDataPath == null)
             {
-                if (pathPreview.Count == 0){throw new System.Exception("Path generation failed: No remaining paths to explore.");}
+                if (pathPreview.Count == 1){throw new System.Exception("Path generation failed: No remaining paths to explore.");}
 
                 pathPreview.Remove(currentDataPath);
                 pathPreviewHashset.Remove(currentDataPath.position);
@@ -112,8 +112,8 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
     {
         while (currentPathData.availableDirections.Count > 0)
         {
-            Vector2Int chosenDirection = currentPathData.availableDirections
-            [Random.Range(0, currentPathData.availableDirections.Count)];
+            Vector2Int chosenDirection = 
+            currentPathData.availableDirections[Random.Range(0, currentPathData.availableDirections.Count)];
             PathPreviewData newPathData = new(currentPathData.position + chosenDirection);
             
             currentPathData.availableDirections.Remove(chosenDirection);
@@ -131,9 +131,11 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
     {
         if (TilePathIsInUse(position)){return false;}
         if (AreSurroundingTilesUsed(position)){return false;}
-        if (!IsInsideOfChunk(position)){return false;}
+        
+        if (CanEnd(position)){return lastPathReached = true;}
+        if (IsInsideOfChunk(position)){return true;}
 
-        return true;
+        return false;
     }
 
     private bool TilePathIsInUse(Vector2Int tilePosition)
@@ -155,13 +157,11 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
 
     private bool IsInsideOfChunk(Vector2Int tilePosition)
     {   
-        if (IsValidEnd(tilePosition)){return lastPathReached = true;}
-
         return tilePosition.x > chunkLimitsX.Min && tilePosition.x < chunkLimitsX.Max && 
         tilePosition.y > chunkLimitsY.Min && tilePosition.y < chunkLimitsY.Max;
     }
 
-    private bool IsValidEnd(Vector2Int tilePosition)
+    private bool CanEnd(Vector2Int tilePosition)
     {   
         if (startEdge != null && !canEnd)
         {
@@ -172,9 +172,18 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
             canEnd = true;    
         }
         
+        return IsValidEdge(tilePosition);
+    }
+
+    private bool IsValidEdge(Vector2Int tilePosition)
+    {
         Vector2Int? edge = GetTileEdge(tilePosition);
 
-        return edge != null && edge != startEdge;
+        if (edge == null) {return false;}
+        if (edge == startEdge) {return false;}
+        if (chunksManager.IsChunkAtPosition(chunkRelativePosition + edge.Value)) { return false;}
+
+        return true;
     }
 
     private void FillChunk()
