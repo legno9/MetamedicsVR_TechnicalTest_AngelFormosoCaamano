@@ -14,8 +14,8 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
             availableDirections = new (directions);
         }
     }
+    public HashSet<Vector2Int> availableSides;
 
-    private ChunksManager chunksManager;
     private GameObject terrainPrefab;
     private GameObject pathPrefab;
     private List<PathPreviewData> pathPreview  = new();
@@ -47,10 +47,9 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         }
     }
 
-    public Vector2Int Initialize( Vector2Int chunkDimensions, Vector2Int startPathTile, Vector2Int relativePosition, GameObject terrainType, GameObject pathType)
+    public Vector2Int Initialize( Vector2Int chunkDimensions, 
+    Vector2Int startPathTile, Vector2Int relativePosition, GameObject terrainType, GameObject pathType)
     {
-        chunksManager = ChunksManager.Instance;
-
         pathStart = startPathTile;
         chunkRelativePosition = relativePosition;
 
@@ -68,7 +67,6 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         startEdge = GetTileEdge(pathStart);
         
         GeneratePath();
-        FillChunk();
         
         return pathEnd.Value;
     }
@@ -179,14 +177,14 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
     {
         Vector2Int? edge = GetTileEdge(tilePosition);
 
-        if (edge == null) {return false;}
-        if (edge == startEdge) {return false;}
-        if (chunksManager.IsChunkAtPosition(chunkRelativePosition + edge.Value)) { return false;}
+        if (edge == null) { return false; }
+        if (edge == startEdge) { return false; }
+        if (!availableSides.Contains(edge.Value)) { return false; }
 
         return true;
     }
 
-    private void FillChunk()
+    public void FillChunk()
     {
         pathTiles = new Tile[pathPreview.Count];
         terrainTiles = new Tile[chunkSize.x * chunkSize.y - pathPreview.Count];
@@ -233,5 +231,23 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         if (pathTile.y == chunkLimitsY.Min){return Vector2Int.down;}
 
         return null;
+    }
+
+    public Vector2Int GetEndEdge()
+    {
+        return GetTileEdge(pathEnd.Value).Value;
+    }
+
+    public Vector2Int RestartPathGenerated()
+    {
+        pathPreview.Clear();
+        pathPreviewHashset.Clear();
+        pathEnd = null;
+        lastPathReached = false;
+        canEnd = false;
+
+        GeneratePath();
+
+        return pathEnd.Value;
     }
 }

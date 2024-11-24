@@ -17,5 +17,4 @@ public class Tile
         ChunkParent = parent;
         TileGO = tileObject;
     }
-
 }

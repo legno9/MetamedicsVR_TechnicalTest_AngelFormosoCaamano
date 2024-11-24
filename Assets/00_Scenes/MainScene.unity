@@ -270,10 +270,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 627e08d208630944b9a1fcb7f1e4f110, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  randomSeedController: {fileID: 317664662}
   terrainPrefab: {fileID: 3044635747522674541, guid: 9855bfa8f606c354c818c0d696c66c84, type: 3}
   pathPrefab: {fileID: 6483232364542597053, guid: 14c945722ac52204994767e1c1a926c6, type: 3}
-  chunkSize: {x: 21, y: 21}
-  numberOfChunks: 5
+  chunkSize: {x: 5, y: 5}
+  numberOfChunks: 4000
 --- !u!4 &317664661
 Transform:
   m_ObjectHideFlags: 0
@@ -301,7 +302,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0aee0812e6c723c4eac4a11a9a74993a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  seed: 208313684
+  seed: 
 --- !u!1 &604712593
 GameObject:
   m_ObjectHideFlags: 0
