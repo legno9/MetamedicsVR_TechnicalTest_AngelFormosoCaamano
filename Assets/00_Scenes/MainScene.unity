@@ -251,6 +251,7 @@ GameObject:
   - component: {fileID: 317664661}
   - component: {fileID: 317664660}
   - component: {fileID: 317664662}
+  - component: {fileID: 317664663}
   m_Layer: 0
   m_Name: ChunksManager
   m_TagString: Untagged
@@ -271,10 +272,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   randomSeedController: {fileID: 317664662}
+  meshesCombiner: {fileID: 317664663}
   terrainPrefab: {fileID: 3044635747522674541, guid: 9855bfa8f606c354c818c0d696c66c84, type: 3}
   pathPrefab: {fileID: 6483232364542597053, guid: 14c945722ac52204994767e1c1a926c6, type: 3}
-  chunkSize: {x: 5, y: 5}
-  numberOfChunks: 4000
+  chunkSize: {x: 20, y: 20}
+  numberOfChunks: 10
+  tryCombineAllChunks: 0
 --- !u!4 &317664661
 Transform:
   m_ObjectHideFlags: 0
@@ -303,6 +306,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   seed: 
+--- !u!114 &317664663
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 317664659}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fcf26791a707f984d8259dbc1cb76922, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &604712593
 GameObject:
   m_ObjectHideFlags: 0
@@ -335,6 +350,53 @@ Transform:
   - {fileID: 203844589}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &754499799
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 754499801}
+  - component: {fileID: 754499802}
+  m_Layer: 0
+  m_Name: Player
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &754499801
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 754499799}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 961739753}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &754499802
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 754499799}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 95df5197a4dac3b43b54a0677e5f8a29, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mouseSensitivity: 100
+  moveSpeed: 20
 --- !u!1 &961739749
 GameObject:
   m_ObjectHideFlags: 0
@@ -465,13 +527,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 961739749}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.5, z: -4}
+  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: 0, y: 100, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_Father: {fileID: 754499801}
+  m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
 --- !u!1 &1160234425
 GameObject:
   m_ObjectHideFlags: 0
@@ -525,7 +587,7 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 961739753}
   - {fileID: 1160234427}
+  - {fileID: 754499801}
   - {fileID: 604712594}
   - {fileID: 317664661}

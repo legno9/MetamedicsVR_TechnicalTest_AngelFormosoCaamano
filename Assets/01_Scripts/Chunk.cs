@@ -1,7 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 
-public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk en runtime? boton
+public class Chunk: MonoBehaviour
 {
     public struct PathPreviewData
     {
@@ -15,11 +16,14 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         }
     }
     public HashSet<Vector2Int> availableSides;
-
+    
+    private ChunksManager chunksManager;
+    private MeshesCombiner meshesCombiner;
     private GameObject terrainPrefab;
     private GameObject pathPrefab;
     private List<PathPreviewData> pathPreview  = new();
     private HashSet<Vector2Int> pathPreviewHashset  = new();
+    private HashSet<Vector2Int> forbiddenTiles = new();
     private Tile[] pathTiles;
     private Tile[] terrainTiles;
     private Vector2Int chunkSize;
@@ -31,6 +35,9 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
     private bool canEnd = false;
     private static readonly Vector2Int[] directions =
     {Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right};
+
+    private readonly int iterationLimit = 100000; // Límite de iteraciones
+    private int iterationCount = 0;
     
     private Range chunkLimitsX;
     private Range chunkLimitsY;
@@ -67,6 +74,8 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         startEdge = GetTileEdge(pathStart);
         
         GeneratePath();
+
+        meshesCombiner = GetComponent<MeshesCombiner>();
         
         return pathEnd.Value;
     }
@@ -75,8 +84,16 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
     {
         chunkSize = dimensions;
         Vector2Int halfChunk = dimensions / 2;
-        chunkLimitsX = new Range(-halfChunk.x, halfChunk.x);
-        chunkLimitsY = new Range(-halfChunk.y, halfChunk.y);
+
+        chunkLimitsX = new Range(
+            dimensions.x % 2 == 0 ? -halfChunk.x + 1 : -halfChunk.x,
+            halfChunk.x
+        );
+
+        chunkLimitsY = new Range(
+            -halfChunk.y,
+            dimensions.y % 2 == 0 ? halfChunk.y - 1 : halfChunk.y
+        );
     }
 
     private void GeneratePath()
@@ -84,6 +101,9 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         PathPreviewData currentDataPath = new(pathStart);
         while (pathEnd == null)
         {
+            if (iterationCount++ > iterationLimit)
+                { throw new System.Exception("Infinite loop detected in path selection."); }
+
             pathPreview.Add(currentDataPath);
             pathPreviewHashset.Add(currentDataPath.position);
               
@@ -93,10 +113,14 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
 
             while (nextDataPath == null)
             {
-                if (pathPreview.Count == 1){throw new System.Exception("Path generation failed: No remaining paths to explore.");}
+                if (iterationCount++ > iterationLimit)
+                { throw new System.Exception("Infinite loop detected in previous path calculation."); }
 
+                if (pathPreview.Count == 1){throw new System.Exception("Path generation failed: No remaining paths to explore.");}
+                
                 pathPreview.Remove(currentDataPath);
                 pathPreviewHashset.Remove(currentDataPath.position);
+                forbiddenTiles.Add(currentDataPath.position);
 
                 currentDataPath = pathPreview[^1];
                 nextDataPath = GetNextDataPath(currentDataPath);
@@ -136,9 +160,9 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         return false;
     }
 
-    private bool TilePathIsInUse(Vector2Int tilePosition)
+    private bool TilePathIsInUse(Vector2Int tilePosition, bool byForbidden = true)
     {
-        return pathPreviewHashset.Contains(tilePosition);
+        return pathPreviewHashset.Contains(tilePosition) || byForbidden && forbiddenTiles.Contains(tilePosition);
     }
 
     private bool AreSurroundingTilesUsed(Vector2Int tilePosition)
@@ -147,7 +171,8 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
 
         foreach (Vector2Int direction in directions)
         {
-            if (TilePathIsInUse(tilePosition + direction)){tilesUsed ++;}
+            if (TilePathIsInUse(tilePosition + direction, false)){tilesUsed ++;}
+            
         }
 
         return tilesUsed > 1; //The tile behind is always used.
@@ -156,7 +181,7 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
     private bool IsInsideOfChunk(Vector2Int tilePosition)
     {   
         return tilePosition.x > chunkLimitsX.Min && tilePosition.x < chunkLimitsX.Max && 
-        tilePosition.y > chunkLimitsY.Min && tilePosition.y < chunkLimitsY.Max;
+               tilePosition.y > chunkLimitsY.Min && tilePosition.y < chunkLimitsY.Max;
     }
 
     private bool CanEnd(Vector2Int tilePosition)
@@ -188,6 +213,7 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
     {
         pathTiles = new Tile[pathPreview.Count];
         terrainTiles = new Tile[chunkSize.x * chunkSize.y - pathPreview.Count];
+
         int terrainTileIndex = 0, pathTileIndex = 0;
 
         for (int x = chunkLimitsX.Min; x <= chunkLimitsX.Max; x++)
@@ -203,7 +229,7 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
                     tilePosition.y + chunkSize.y * chunkRelativePosition.y
                 );
 
-                bool isPathTile = TilePathIsInUse(tilePosition);
+                bool isPathTile = TilePathIsInUse(tilePosition, false);
                 GameObject prefab = isPathTile ? pathPrefab : terrainPrefab;
                 GameObject tileGO = InstanceTile(tilePosition, tileWorldPosition, prefab);
 
@@ -213,6 +239,8 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
                 else {terrainTiles[terrainTileIndex++] = tile;}
             }
         }
+
+        meshesCombiner.CombineMeshesInChildren();
     }
 
     private GameObject InstanceTile(Vector2Int positionInChunk, Vector3 globalPosition, GameObject prefab)
@@ -238,10 +266,11 @@ public class Chunk: MonoBehaviour //Que se pueda modificar el tamano del chunk e
         return GetTileEdge(pathEnd.Value).Value;
     }
 
-    public Vector2Int RestartPathGenerated()
+    public Vector2Int RestartPathGenerated() //Restart the path generation from the middle of the chunk
     {
         pathPreview.Clear();
         pathPreviewHashset.Clear();
+        forbiddenTiles.Clear();
         pathEnd = null;
         lastPathReached = false;
         canEnd = false;

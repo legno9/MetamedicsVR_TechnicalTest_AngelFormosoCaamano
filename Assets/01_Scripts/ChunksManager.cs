@@ -1,40 +1,51 @@
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
-//Comentar
-//Encapsular
+[RequireComponent(typeof(MeshesCombiner))]
+[RequireComponent(typeof(RandomSeedController))]
 
 public class ChunksManager : MonoBehaviour
 {
     [SerializeField] private RandomSeedController randomSeedController;
+    [SerializeField] private MeshesCombiner meshesCombiner;
+    [Space]
     [SerializeField] private GameObject terrainPrefab;
     [SerializeField] private GameObject pathPrefab;
+    [Space]
     [SerializeField] private Vector2Int chunkSize = new(13, 13);
     [SerializeField] private int numberOfChunks = 4;
-    
+    [Space]
+    [SerializeField] private bool tryCombineAllChunks = true;
+
 
     private Chunk[] chunks;
     private HashSet<Vector2Int> chunksPositions = new();
     private HashSet<Vector2Int> forbiddenPositions = new();
     private static readonly Vector2Int[] directions =
     {Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right};
+    private GameObject chunksParent;
 
     private readonly int iterationLimit = 100000; // Límite de iteraciones
     private int iterationCount = 0;
 
     private void Start()
     {
-        if (Mathf.Min(chunkSize.x, chunkSize.y) < 3){throw new System.Exception ("Chunk size has to be at least (3,3).");}
+        if (Mathf.Min(chunkSize.x, chunkSize.y) < 3)
+        {throw new System.Exception ("Chunk size has to be at least (3,3).");}
 
         if (randomSeedController == null || terrainPrefab == null || pathPrefab == null)
             throw new System.Exception("Please ensure all serialized fields are assigned in the inspector.");
+
+        chunksParent = new GameObject("Chunks");
+        chunksParent.transform.SetParent(transform, false);
 
         chunks = new Chunk[numberOfChunks];
         randomSeedController.SetSeed();
         InitializeChunks();
     }
 
-    private void InitializeChunks() //Problemas con chunks de tamano par
+    private void InitializeChunks()
     {
         Vector2Int startTilePosition = Vector2Int.zero;
         Vector2Int currentChunkPosition = Vector2Int.zero;
@@ -42,15 +53,18 @@ public class ChunksManager : MonoBehaviour
 
         for (int c = 0; c < numberOfChunks; c++)
         {
-            GameObject chunkGO = new GameObject($"Chunk {currentChunkPosition}");
+            GameObject chunkGO = new($"Chunk {currentChunkPosition}");
+            chunkGO.transform.parent = chunksParent.transform;
             Chunk chunk = chunkGO.AddComponent<Chunk>();
+            chunk.AddComponent<MeshesCombiner>();
 
             chunksPositions.Add(currentChunkPosition);
             chunks[c] = chunk;
-            
+
             chunk.availableSides = availableSides;
-            Vector2Int endTilePosition = chunk.Initialize(chunkSize, startTilePosition, currentChunkPosition, terrainPrefab, pathPrefab);
-            
+            Vector2Int endTilePosition = chunk.Initialize(chunkSize, startTilePosition,
+            currentChunkPosition, terrainPrefab, pathPrefab);
+
             Vector2Int? nextChunkDirection = chunk.GetTileEdge(endTilePosition);
             currentChunkPosition += nextChunkDirection.Value;
 
@@ -58,17 +72,17 @@ public class ChunksManager : MonoBehaviour
 
             while (availableSides.Count == 0)
             {
-                if (iterationCount++ > iterationLimit){throw new System.Exception("Bucle infinito detectado en la generación de chunks.");}
+                if (iterationCount++ > iterationLimit)
+                { throw new System.Exception("Infinite loop detected in chunk generation."); }
 
-                if (GetPreviousChunk(ref c, ref chunk, ref currentChunkPosition, ref nextChunkDirection, ref endTilePosition, ref availableSides))
+                if (GetPreviousChunk(ref c, ref chunk, ref currentChunkPosition, ref nextChunkDirection,
+                ref endTilePosition, ref availableSides))
                 {
                     throw new System.Exception("Chunk generation failed: No available sides.");
                 }
 
             }
-            startTilePosition = nextChunkDirection.Value.x != 0 ? 
-            new Vector2Int(-startTilePosition.x, startTilePosition.y) : 
-            new Vector2Int(startTilePosition.x, -startTilePosition.y);
+            startTilePosition = GetStartTilePosition(endTilePosition, nextChunkDirection);
         }
 
         FillAllChunks();
@@ -120,11 +134,34 @@ public class ChunksManager : MonoBehaviour
         return new HashSet<Vector2Int>(availableSides);
     }
 
+    private Vector2Int GetStartTilePosition(Vector2Int endTilePosition, Vector2Int? nextChunkDirection)
+    {
+        if (nextChunkDirection.Value.x != 0 && chunkSize.x % 2 == 0 )
+        {
+            return new (-(endTilePosition.x -1), endTilePosition.y);
+        }
+        else if (nextChunkDirection.Value.y != 0 && chunkSize.y % 2 == 0)
+        {
+            return new (endTilePosition.x, -(endTilePosition.y + 1));
+        }
+        else
+        {
+            return nextChunkDirection.Value.x != 0 ?
+                    new (-endTilePosition.x, endTilePosition.y) :
+                    new (endTilePosition.x, -endTilePosition.y);
+        }   
+    }
+
     private void FillAllChunks()
     {
         foreach (Chunk chunk in chunks)
         {
             chunk.FillChunk();
         }
+
+        if (tryCombineAllChunks)
+        {
+            meshesCombiner.CombineMeshesInChildren();
+        }   
     }
 }
