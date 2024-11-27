@@ -6,24 +6,24 @@ public class ChunksManagerEditor : Editor
 {
     public override void OnInspectorGUI()
     {
-        // Llama al Inspector predeterminado para mostrar las variables
+        // Draw the default inspector UI
         DrawDefaultInspector();
 
-        // Referencia al script que estamos editando
+        // Get the target ChunksManager instance
         ChunksManager chunksManager = (ChunksManager)target;
 
+        // Only show buttons if the application is playing
         if (!Application.isPlaying) return;
 
-        // Agregar un botón al Inspector
+        // Button to initialize chunks
         if (GUILayout.Button("Initialize Chunks"))
         {
-            // Llama al método del script cuando se presiona el botón
             chunksManager.StartChunkManager();
         }
 
+        // Button to remove all chunks
         if (GUILayout.Button("Remove All Chunks"))
         {
-            // Llama al método del script cuando se presiona el botón
             chunksManager.RemoveAllChunks();
         }
     }

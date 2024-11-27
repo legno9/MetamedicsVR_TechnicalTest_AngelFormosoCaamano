@@ -10,23 +10,22 @@ public class RandomSeedControllerEditor : Editor
 
         RandomSeedController controller = (RandomSeedController)target;
 
-        // Inicia un grupo horizontal
+        // Begin horizontal layout for buttons
         GUILayout.BeginHorizontal();
 
-        // Botón para generar una nueva semilla
+        // Button to generate a new random seed
         if (GUILayout.Button("Randomize Seed"))
         {
             controller.GenerateRandomSeed();
         }
 
-        // Botón para copiar la semilla al portapapeles
+        // Button to copy the current seed to the clipboard
         if (GUILayout.Button("Copy Seed"))
         {
             controller.CopySeedToClipboard();
         }
 
-        // Termina el grupo horizontal
+        // End horizontal layout
         GUILayout.EndHorizontal();
     }
 }
-

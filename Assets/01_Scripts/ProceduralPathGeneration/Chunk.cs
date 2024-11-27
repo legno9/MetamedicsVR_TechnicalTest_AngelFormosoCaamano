@@ -16,8 +16,8 @@ public class Chunk: MonoBehaviour
         }
     }
     public HashSet<Vector2Int> availableSides;
-    public Vector2Int endEdge;
-    public Vector2Int secondaryEndEdge;
+    [HideInInspector]public Vector2Int endEdge;
+    [HideInInspector]public Vector2Int secondaryEndEdge;
 
     private MeshesCombiner meshesCombiner;
     private GameObject terrainPrefab;
@@ -93,6 +93,7 @@ public class Chunk: MonoBehaviour
         chunkSize = dimensions;
         Vector2Int halfChunk = dimensions / 2;
 
+        // Set the chunk limits for X and Y based on the dimensions
         chunkLimitsX = new Range(
             dimensions.x % 2 == 0 ? -halfChunk.x + 1 : -halfChunk.x,
             halfChunk.x
@@ -103,6 +104,7 @@ public class Chunk: MonoBehaviour
             dimensions.y % 2 == 0 ? halfChunk.y - 1 : halfChunk.y
         );
 
+        // Determine the starting edge of the chunk
         startEdge = GetTileEdge(pathStart);
         
         if (startEdge != null)
@@ -149,24 +151,27 @@ public class Chunk: MonoBehaviour
 
             PathPreviewData? nextDataPath = GetNextDataPath(currentDataPath);
 
+            // If no valid path is found, backtrack to the previous path data
             while (nextDataPath == null)
             {
                 if (iterationCount++ > iterationLimit)
                 { throw new System.Exception("Infinite loop detected in previous path calculation."); }
 
-                if (pathPreview.Count == 1){throw new System.Exception("Path generation failed: No remaining paths to explore.");}
+                if (pathPreview.Count == 1){throw new System.Exception($"Path generation failed: No remaining paths to explore in chunk {chunkRelativePosition}.");}
                 
                 BacktrackPath(currentDataPath);
                 currentDataPath = pathPreview[^1];
                 nextDataPath = GetNextDataPath(currentDataPath);
             }
-            
+
+            // Move to the next path data
             currentDataPath = nextDataPath.Value;
         }
     }
 
     private void BacktrackPath(PathPreviewData currentDataPath)
     {
+        // Remove the current path data from the preview and hashset, and add it to forbidden tiles
         pathPreview.Remove(currentDataPath);
         pathPreviewHashset.Remove(currentDataPath.position);
         forbiddenTiles.Add(currentDataPath.position);
@@ -174,13 +179,16 @@ public class Chunk: MonoBehaviour
 
     private PathPreviewData? GetNextDataPath(PathPreviewData currentPathData)
     {
+        // Attempt to find a valid direction to continue the path
         while (currentPathData.availableDirections.Count > 0)
         {
             List<Vector2Int> weightedDirections = GetWeightedDirections(currentPathData);
             Vector2Int chosenDirection = weightedDirections[Random.Range(0, weightedDirections.Count)];
 
+            // Create new path data based on the chosen direction
             PathPreviewData newPathData = new(currentPathData.position + chosenDirection);
-            
+
+            // Remove the chosen direction from available directions
             currentPathData.availableDirections.Remove(chosenDirection);
 
             if (IsPositionValid(newPathData.position)) 
@@ -189,6 +197,7 @@ public class Chunk: MonoBehaviour
             }
         }
 
+        // Return null if no valid path is found
         return null;
     }
 
@@ -198,6 +207,7 @@ public class Chunk: MonoBehaviour
         int[] cumulativeWeights = new int[availableDirections.Count];
         int totalWeight = 0;
 
+        // Calculate weights for each available direction
         for (int i = 0; i < availableDirections.Count; i++)
         {
             int weight = CalculateDirectionWeight(currentPathData.position + availableDirections[i]);
@@ -207,6 +217,7 @@ public class Chunk: MonoBehaviour
 
         if (totalWeight == 0) { throw new System.Exception("No weighted directions found."); }
 
+        // Select a random weight from the total weight, and then select the direction associated with that weight
         int randomWeight = Random.Range(0, totalWeight);
         for (int i = 0; i < cumulativeWeights.Length; i++)
         {
@@ -224,16 +235,19 @@ public class Chunk: MonoBehaviour
         float newPositionLine = 0f;
         if (startEdge != null)
         {
+            // Calculate the line position based on the start edge
             newPositionLine = startEdge.Value.x == 0
                 ? Mathf.Abs(startEdge.Value.y) * newPosition.x
                 : Mathf.Abs(startEdge.Value.x) * newPosition.y;
         }
 
-        float expansionWeight = Mathf.Exp(-Mathf.Abs(newPositionLine) 
+        // Calculate weights based on expansion and alignment factors
+        float expansionWeight = Mathf.Exp(-Mathf.Abs(newPositionLine)
         / maxDistanceToCenterLine * (1 - pathExpansionFactor) * 10);
-        float alignmentWeight = Mathf.Exp(-Mathf.Abs(startLine - newPositionLine) 
+        float alignmentWeight = Mathf.Exp(-Mathf.Abs(startLine - newPositionLine)
         / maxDistanceToStartLine * (1 - pathIrregularityFactor) * 10);
 
+        // Ensure a minimum weight
         float finalWeight = Mathf.Max(expansionWeight + alignmentWeight, 0.1f);
 
         return Mathf.RoundToInt(finalWeight * 10);
@@ -252,6 +266,7 @@ public class Chunk: MonoBehaviour
 
     private bool TilePathIsInUse(Vector2Int tilePosition, bool byForbidden = true)
     {
+        // Check if the tile position is already in use or forbidden
         return pathPreviewHashset.Contains(tilePosition) || byForbidden && forbiddenTiles.Contains(tilePosition);
     }
 
@@ -269,8 +284,9 @@ public class Chunk: MonoBehaviour
     }
 
     private bool IsInsideOfChunk(Vector2Int tilePosition)
-    {   
-        return tilePosition.x > chunkLimitsX.Min && tilePosition.x < chunkLimitsX.Max && 
+    {
+        // Check if the tile position is within the chunk limits
+        return tilePosition.x > chunkLimitsX.Min && tilePosition.x < chunkLimitsX.Max &&
                tilePosition.y > chunkLimitsY.Min && tilePosition.y < chunkLimitsY.Max;
     }
 
@@ -278,11 +294,11 @@ public class Chunk: MonoBehaviour
     {   
         if (startEdge != null && !canEnd)
         {
-            if (tilePosition.x * startEdge.Value.x > 0 || tilePosition.y * startEdge.Value.y > 0) 
-            {                
+            if (tilePosition.x * startEdge.Value.x > 0 || tilePosition.y * startEdge.Value.y > 0)
+            {
                 return false;
             }
-            canEnd = true;    
+            canEnd = true;
         }
         
         return IsValidEdge(tilePosition);
@@ -301,15 +317,14 @@ public class Chunk: MonoBehaviour
 
     public Vector2Int? GenerateSecondaryPath()
     {
-        int secondaryPathStartIndex = pathPreview.Count;
         int secondaryPathTries = 2; // The secondary path can't be the same as the last path.
 
-        // Remove the end edge from available sides to prevent backtracking
+        // Remove the end edge from available sides to prevent exit the same side.
         availableSides.Remove(endEdge);
 
         // Attempt to find a valid starting point for the secondary path
         PathPreviewData? startSecondaryPath = null;
-        while (startSecondaryPath == null && secondaryPathTries < pathPreview.Count)
+        while (startSecondaryPath == null && secondaryPathTries < pathPreview.Count - 1)
         {
             if (iterationCount++ > iterationLimit)
             {
@@ -321,11 +336,11 @@ public class Chunk: MonoBehaviour
 
         if (startSecondaryPath == null)
         {
-            Debug.LogWarning("Secondary path generation failed: No starting point found.");
             return null;
         }
 
         PathPreviewData currentSecondaryPath = startSecondaryPath.Value;
+        int secondaryPathStartIndex = pathPreview.Count + 1; // +1 because the start is gonna be added to the list.
 
         // Generate the secondary path
         while (!secondaryPathEnded)
@@ -356,7 +371,8 @@ public class Chunk: MonoBehaviour
                     throw new System.Exception("Infinite loop detected in secondary path generation.");
                 }
 
-                if (pathPreview.Count == secondaryPathStartIndex){Debug.Log("Secondary path ended abruptly.");return null;}
+                if (pathPreview.Count == secondaryPathStartIndex){return null;}
+                
 
                 // Backtrack if no valid path is found
                 BacktrackPath(currentSecondaryPath);
@@ -364,7 +380,7 @@ public class Chunk: MonoBehaviour
                 currentSecondaryPath = pathPreview[^1];
                 nextSecondaryPath = GetNextDataPath(currentSecondaryPath);
             }
-
+            
             currentSecondaryPath = nextSecondaryPath.Value;
         }
 
@@ -373,24 +389,28 @@ public class Chunk: MonoBehaviour
 
     public void FillChunk()
     {
+        // Initialize arrays for path and terrain tiles
         pathTiles = new Tile[pathPreview.Count];
         terrainTiles = new Tile[chunkSize.x * chunkSize.y - pathPreview.Count];
 
         int terrainTileIndex = 0, pathTileIndex = 0;
 
+        // Iterate over each tile position within the chunk limits
         for (int x = chunkLimitsX.Min; x <= chunkLimitsX.Max; x++)
         {
             for (int y = chunkLimitsY.Min; y <= chunkLimitsY.Max; y++)
             {
                 Vector2Int tilePosition = new(x, y);
 
-                Vector3 tileWorldPosition = new 
+                // Calculate the world position of the tile
+                Vector3 tileWorldPosition = new
                 (
-                    tilePosition.x + chunkSize.x * chunkRelativePosition.x, 
-                    0, 
+                    tilePosition.x + chunkSize.x * chunkRelativePosition.x,
+                    0,
                     tilePosition.y + chunkSize.y * chunkRelativePosition.y
                 );
 
+                // Determine if the tile is part of the path or terrain
                 bool isPathTile = TilePathIsInUse(tilePosition, false);
                 GameObject prefab = isPathTile ? pathPrefab : terrainPrefab;
                 GameObject tileGO = InstanceTile(tilePosition, tileWorldPosition, prefab);
@@ -415,6 +435,7 @@ public class Chunk: MonoBehaviour
 
     public Vector2Int? GetTileEdge (Vector2Int pathTile)
     {
+        // Check if the tile is on the edge of the chunk and return the corresponding direction
         if (pathTile.x == chunkLimitsX.Max){return Vector2Int.right;}
         if (pathTile.x == chunkLimitsX.Min){return Vector2Int.left;}
         if (pathTile.y == chunkLimitsY.Max){return Vector2Int.up;}
@@ -423,7 +444,7 @@ public class Chunk: MonoBehaviour
         return null;
     }
 
-    public Vector2Int RestartPathGenerated() //Restart the path generation from the middle of the chunk
+    public Vector2Int RestartPathGenerated()
     {
         pathPreview.Clear();
         pathPreviewHashset.Clear();

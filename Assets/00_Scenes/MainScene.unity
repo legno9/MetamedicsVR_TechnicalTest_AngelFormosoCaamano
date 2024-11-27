@@ -277,8 +277,8 @@ MonoBehaviour:
   pathPrefab: {fileID: 6483232364542597053, guid: 14c945722ac52204994767e1c1a926c6, type: 3}
   chunkSize: {x: 13, y: 13}
   numberOfChunks: 100
-  CombineAllChunks: 0
-  SecondPathChance: 0.003
+  CombineAllChunks: 1
+  SecondPathChance: 1
   ExpansionFactor: 0.5
   IrregularityFactor: 0.5
 --- !u!4 &317664661

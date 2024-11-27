@@ -21,9 +21,9 @@ public class ChunksManager : MonoBehaviour
     [Range(0f, 100f)]
     [SerializeField] private float SecondPathChance = 10f;
     [Range(0f, 1f)]
-    [SerializeField] private float ExpansionFactor = 0.5f; // Configurable expansion factor
+    [SerializeField] private float ExpansionFactor = 0.5f;
     [Range(0f, 1f)]
-    [SerializeField] private float IrregularityFactor = 0.5f; // Configurable irregularity factor
+    [SerializeField] private float IrregularityFactor = 0.5f;
 
     private Chunk[] chunks;
     private HashSet<Vector2Int> chunksPositions;
@@ -39,12 +39,14 @@ public class ChunksManager : MonoBehaviour
 
     public void StartChunkManager()
     {
+        // Ensure the chunk size is at least (3,3) to avoid errors in generation
         if (Mathf.Min(chunkSize.x, chunkSize.y) < 3)
         {throw new System.Exception ("Chunk size has to be at least (3,3).");}
 
         if (randomSeedController == null || terrainPrefab == null || pathPrefab == null)
             throw new System.Exception("Please ensure all serialized fields are assigned in the inspector.");
 
+        // Deactivate all child objects of the current transform
         foreach (Transform child in transform)
         {
             child.gameObject.SetActive(false);
@@ -65,6 +67,7 @@ public class ChunksManager : MonoBehaviour
 
     private void InitializeChunks()
     {
+        // Start at the origin for the first chunk
         Vector2Int startTilePosition = Vector2Int.zero;
         HashSet<Vector2Int> availableSides = new(directions);
 
@@ -72,9 +75,11 @@ public class ChunksManager : MonoBehaviour
         int endTileCounter = 1;
         currentChunkPositions.Add(Vector2Int.zero);
 
+        // Loop through and create each chunk
         for (int c = 0; c < numberOfChunks; c++)
         {
-            GameObject chunkGO = new($"Chunk {currentChunkPositions[index]}");
+            // Create a new GameObject for the chunk and set its parent
+            GameObject chunkGO = new GameObject($"Chunk {currentChunkPositions[index]}");
             chunkGO.transform.parent = chunksParent.transform;
             Chunk chunk = chunkGO.AddComponent<Chunk>();
             chunk.AddComponent<MeshesCombiner>();
@@ -82,6 +87,7 @@ public class ChunksManager : MonoBehaviour
             chunksPositions.Add(currentChunkPositions[index]);
             chunks[c] = chunk;
 
+            // Assign available sides to the chunk
             chunk.availableSides = availableSides;
             
             Vector2Int endTilePosition = chunk.Initialize(chunkSize, startTilePosition,
@@ -90,10 +96,11 @@ public class ChunksManager : MonoBehaviour
             if (endTilePositions.Count == 0){endTilePositions.Add(endTilePosition);}
             else {endTilePositions[index] = endTilePosition;}
 
+            // Determine if a secondary path should be generated
             if (Random.Range(0f, 100f) < SecondPathChance)
             {
                 Vector2Int? secondaryPathEnd = chunk.GenerateSecondaryPath();
-                if (secondaryPathEnd != null)
+                if (secondaryPathEnd.HasValue)
                 {
                     endTilePositions.Add(secondaryPathEnd.Value);
                     currentChunkPositions.Add(currentChunkPositions[index]);
@@ -102,8 +109,10 @@ public class ChunksManager : MonoBehaviour
 
             index++;
 
-            Vector2Int? nextChunkDirection;
-            while (true)
+            bool validChunkFound = false;
+            Vector2Int nextChunkDirection;
+
+            while (!validChunkFound)
             {
                 if (index >= endTileCounter)
                 {
@@ -111,58 +120,63 @@ public class ChunksManager : MonoBehaviour
                     index = 0;
                 }  
 
-                nextChunkDirection = chunk.GetTileEdge(endTilePositions[index]);
-                currentChunkPositions[index] += nextChunkDirection.Value;
+                // Get the direction for the next chunk based on the current end tile
+                nextChunkDirection = chunk.GetTileEdge(endTilePositions[index]).Value;
+                currentChunkPositions[index] += nextChunkDirection;
                 
                 availableSides = GetAvailableSides(currentChunkPositions[index]);
 
-                if (availableSides.Count == 0)
+                if (availableSides.Count > 0)
                 {   
-                    if (endTilePositions.Count == 1)
+                    validChunkFound = true;
+                    startTilePosition = GetStartTilePosition(endTilePositions[index], nextChunkDirection);
+                }
+                else if (endTilePositions.Count == 1)
+                {
+                    // Handle the case where only one end tile is available
+                    while (availableSides.Count == 0)
                     {
-                        while (availableSides.Count == 0)   
-                        {
-                            if (iterationCount++ > iterationLimit)
-                            { throw new System.Exception("Infinite loop detected in chunk generation."); }
+                        if (iterationCount++ > iterationLimit)
+                        { throw new System.Exception("Infinite loop detected in chunk generation."); }
 
-                            if (GetPreviousChunk(ref c, index, ref chunk, ref currentChunkPositions, ref nextChunkDirection,
-                            ref endTilePositions, ref availableSides))
-                            {
-                                throw new System.Exception("Chunk generation failed: No available sides.");
-                            }
+                        if (GetPreviousChunk(ref c, index, ref chunk, ref currentChunkPositions, ref nextChunkDirection,
+                        ref endTilePositions, ref availableSides))
+                        {
+                            throw new System.Exception("Chunk generation failed: No available sides.");
                         }
                     }
-                    else
-                    {
-                        currentChunkPositions.RemoveAt(index);
-                        endTilePositions.RemoveAt(index);
-                        endTileCounter--;
-                    }
+                    validChunkFound = true;
+                    startTilePosition = GetStartTilePosition(endTilePositions[index], nextChunkDirection);
+                }  
+                else
+                {
+                    // Remove the current position and end tile if no valid sides are found
+                    currentChunkPositions.RemoveAt(index);
+                    endTilePositions.RemoveAt(index);
+                    endTileCounter--;
                 }
-                else{break;}
             }
-            
-            startTilePosition = GetStartTilePosition(endTilePositions[index], nextChunkDirection);
         }
         FillAllChunks();
     }
 
     private bool GetPreviousChunk(ref int c, int index, ref Chunk chunk, ref List<Vector2Int> currentChunkPositions, 
-        ref Vector2Int? nextChunkDirection, ref List<Vector2Int> endTilePositions, ref HashSet<Vector2Int> availableSides)
+        ref Vector2Int nextChunkDirection, ref List<Vector2Int> endTilePositions, ref HashSet<Vector2Int> availableSides)
     {
         if (c == 0) return true;
 
         forbiddenPositions.Add(currentChunkPositions[index]);
-        currentChunkPositions[index] -= nextChunkDirection.Value;
-        chunk.availableSides.Remove(nextChunkDirection.Value);
+        currentChunkPositions[index] -= nextChunkDirection;
+        chunk.availableSides.Remove(nextChunkDirection);
 
         // If there are available sides, restart the path and update positions
         if (chunk.availableSides.Count > 0)
         {
             endTilePositions[index] = chunk.RestartPathGenerated();
-            nextChunkDirection = chunk.GetTileEdge(endTilePositions[index]);
-            currentChunkPositions[index] += nextChunkDirection.Value;
+            nextChunkDirection = chunk.GetTileEdge(endTilePositions[index]).Value;
+            currentChunkPositions[index] += nextChunkDirection;
             availableSides = GetAvailableSides(currentChunkPositions[index]);
+
             return false;
         }
 
@@ -181,11 +195,13 @@ public class ChunksManager : MonoBehaviour
     {
         HashSet<Vector2Int> availableSides = new();
 
+        // If the current chunk position is already occupied, return an empty set
         if (chunksPositions.Contains(chunkPosition))
         {
             return availableSides;
         }
 
+        // Iterate over all possible directions to find available sides
         foreach (Vector2Int direction in directions)
         {
             Vector2Int potentialPosition = chunkPosition + direction;
@@ -200,8 +216,10 @@ public class ChunksManager : MonoBehaviour
 
     private Vector2Int GetStartTilePosition(Vector2Int endTilePosition, Vector2Int? nextChunkDirection)
     {
+        // Determine the start tile position based on the end tile position and the direction of the next chunk
         if (nextChunkDirection.Value.x != 0 && chunkSize.x % 2 == 0 )
         {
+            // Adjust position for even-sized chunks in the x-direction
             return new (-(endTilePosition.x -1), endTilePosition.y);
         }
         else if (nextChunkDirection.Value.y != 0 && chunkSize.y % 2 == 0)
@@ -210,6 +228,7 @@ public class ChunksManager : MonoBehaviour
         }
         else
         {
+            // Default adjustment for odd-sized chunks
             return nextChunkDirection.Value.x != 0 ?
                     new (-endTilePosition.x, endTilePosition.y) :
                     new (endTilePosition.x, -endTilePosition.y);

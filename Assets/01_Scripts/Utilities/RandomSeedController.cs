@@ -8,11 +8,13 @@ public class RandomSeedController : MonoBehaviour
 
     private void Awake() 
     {
+        // If the seed is null or whitespace, generate a new random seed
         if (string.IsNullOrWhiteSpace(seed)){GenerateRandomSeed();}
     }
 
     public int GenerateRandomSeed()
     {
+        // Generate a random integer within the full range of int values
         int tempSeed = Random.Range(int.MinValue, int.MaxValue);
         seed = tempSeed.ToString();
         return tempSeed;
@@ -22,6 +24,7 @@ public class RandomSeedController : MonoBehaviour
 
     public int GetCurrentSeedAsInt()
     {
+        // Convert the seed to an integer if it's numeric, otherwise compute a hash code
         return IsNumeric(seed) ? int.Parse(seed) : GetDeterministicHashCode(seed);
     }
 
@@ -29,8 +32,10 @@ public class RandomSeedController : MonoBehaviour
 
     private int GetDeterministicHashCode(string seed)
     {
+        // Compute a deterministic hash code using SHA256 for non-numeric seeds
         using SHA256 sha256 = SHA256.Create();
         byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(seed));
+        // Convert the first 4 bytes of the hash to an integer
         return System.BitConverter.ToInt32(bytes, 0);
     }
 
