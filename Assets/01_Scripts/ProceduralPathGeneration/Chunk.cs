@@ -1,6 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
-using Unity.VisualScripting;
+using System.Linq;
 
 public class Chunk: MonoBehaviour
 {
@@ -16,8 +16,9 @@ public class Chunk: MonoBehaviour
         }
     }
     public HashSet<Vector2Int> availableSides;
-    
-    private ChunksManager chunksManager;
+    public Vector2Int endEdge;
+    public Vector2Int secondaryEndEdge;
+
     private MeshesCombiner meshesCombiner;
     private GameObject terrainPrefab;
     private GameObject pathPrefab;
@@ -31,8 +32,15 @@ public class Chunk: MonoBehaviour
     private Vector2Int? startEdge;
     private Vector2Int pathStart;
     private Vector2Int? pathEnd;
+    private Vector2Int? secondaryPathEnd;
     private bool lastPathReached = false;
     private bool canEnd = false;
+    private bool secondaryPathEnded = false;
+    private float pathExpansionFactor;
+    private float pathIrregularityFactor;
+    private float maxDistanceToCenterLine;
+    private float startLine;
+    private float maxDistanceToStartLine;
     private static readonly Vector2Int[] directions =
     {Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right};
 
@@ -54,13 +62,15 @@ public class Chunk: MonoBehaviour
         }
     }
 
-    public Vector2Int Initialize( Vector2Int chunkDimensions, 
-    Vector2Int startPathTile, Vector2Int relativePosition, GameObject terrainType, GameObject pathType)
+    public Vector2Int Initialize( Vector2Int chunkDimensions, Vector2Int startPathTile, Vector2Int relativePosition, 
+    GameObject terrainType, GameObject pathType, float pathExpansionFactor, float pathIrregularityFactor)
     {
         pathStart = startPathTile;
         chunkRelativePosition = relativePosition;
+        this.pathExpansionFactor = pathExpansionFactor;
+        this.pathIrregularityFactor = pathIrregularityFactor;
 
-        SetChunkSize(chunkDimensions);
+        SetChunkDimensionsValues(chunkDimensions);
 
         transform.position = new(
             relativePosition.x * chunkSize.x, 
@@ -70,8 +80,6 @@ public class Chunk: MonoBehaviour
 
         terrainPrefab = terrainType;
         pathPrefab = pathType;
-
-        startEdge = GetTileEdge(pathStart);
         
         GeneratePath();
 
@@ -80,7 +88,7 @@ public class Chunk: MonoBehaviour
         return pathEnd.Value;
     }
 
-    private void SetChunkSize(Vector2Int dimensions)
+    private void SetChunkDimensionsValues(Vector2Int dimensions)
     {
         chunkSize = dimensions;
         Vector2Int halfChunk = dimensions / 2;
@@ -94,6 +102,31 @@ public class Chunk: MonoBehaviour
             -halfChunk.y,
             dimensions.y % 2 == 0 ? halfChunk.y - 1 : halfChunk.y
         );
+
+        startEdge = GetTileEdge(pathStart);
+        
+        if (startEdge != null)
+        {
+            if (startEdge.Value.x == 0)
+            {
+                float yValue = Mathf.Abs(startEdge.Value.y);
+                startLine = yValue * pathStart.x;
+                maxDistanceToCenterLine = yValue * chunkLimitsX.Max;
+            }
+            else
+            {
+                float xValue = Mathf.Abs(startEdge.Value.x);
+                startLine = xValue * pathStart.y;
+                maxDistanceToCenterLine = xValue * chunkLimitsY.Max;
+            }
+        }
+        else
+        {
+            startLine = 0;
+            maxDistanceToCenterLine = Mathf.Max(chunkLimitsX.Max, chunkLimitsY.Max);
+        }
+
+        maxDistanceToStartLine = maxDistanceToCenterLine + Mathf.Abs(startLine) -1;
     }
 
     private void GeneratePath()
@@ -107,7 +140,12 @@ public class Chunk: MonoBehaviour
             pathPreview.Add(currentDataPath);
             pathPreviewHashset.Add(currentDataPath.position);
               
-            if (lastPathReached){pathEnd = currentDataPath.position; return;}
+            if (lastPathReached)
+            {
+                pathEnd = currentDataPath.position;
+                endEdge = GetTileEdge(pathEnd.Value).Value;
+                return;
+            }
 
             PathPreviewData? nextDataPath = GetNextDataPath(currentDataPath);
 
@@ -118,10 +156,7 @@ public class Chunk: MonoBehaviour
 
                 if (pathPreview.Count == 1){throw new System.Exception("Path generation failed: No remaining paths to explore.");}
                 
-                pathPreview.Remove(currentDataPath);
-                pathPreviewHashset.Remove(currentDataPath.position);
-                forbiddenTiles.Add(currentDataPath.position);
-
+                BacktrackPath(currentDataPath);
                 currentDataPath = pathPreview[^1];
                 nextDataPath = GetNextDataPath(currentDataPath);
             }
@@ -130,12 +165,20 @@ public class Chunk: MonoBehaviour
         }
     }
 
+    private void BacktrackPath(PathPreviewData currentDataPath)
+    {
+        pathPreview.Remove(currentDataPath);
+        pathPreviewHashset.Remove(currentDataPath.position);
+        forbiddenTiles.Add(currentDataPath.position);
+    }
+
     private PathPreviewData? GetNextDataPath(PathPreviewData currentPathData)
     {
         while (currentPathData.availableDirections.Count > 0)
         {
-            Vector2Int chosenDirection = 
-            currentPathData.availableDirections[Random.Range(0, currentPathData.availableDirections.Count)];
+            List<Vector2Int> weightedDirections = GetWeightedDirections(currentPathData);
+            Vector2Int chosenDirection = weightedDirections[Random.Range(0, weightedDirections.Count)];
+
             PathPreviewData newPathData = new(currentPathData.position + chosenDirection);
             
             currentPathData.availableDirections.Remove(chosenDirection);
@@ -147,6 +190,53 @@ public class Chunk: MonoBehaviour
         }
 
         return null;
+    }
+
+    private List<Vector2Int> GetWeightedDirections(PathPreviewData currentPathData)
+    {
+        List<Vector2Int> availableDirections = currentPathData.availableDirections;
+        int[] cumulativeWeights = new int[availableDirections.Count];
+        int totalWeight = 0;
+
+        for (int i = 0; i < availableDirections.Count; i++)
+        {
+            int weight = CalculateDirectionWeight(currentPathData.position + availableDirections[i]);
+            totalWeight += weight;
+            cumulativeWeights[i] = totalWeight;
+        }
+
+        if (totalWeight == 0) { throw new System.Exception("No weighted directions found."); }
+
+        int randomWeight = Random.Range(0, totalWeight);
+        for (int i = 0; i < cumulativeWeights.Length; i++)
+        {
+            if (randomWeight < cumulativeWeights[i])
+            {
+                return new List<Vector2Int> { availableDirections[i] };
+            }
+        }
+
+        throw new System.Exception("Failed to select a weighted direction.");
+    }
+
+    private int CalculateDirectionWeight(Vector2Int newPosition)
+    {
+        float newPositionLine = 0f;
+        if (startEdge != null)
+        {
+            newPositionLine = startEdge.Value.x == 0
+                ? Mathf.Abs(startEdge.Value.y) * newPosition.x
+                : Mathf.Abs(startEdge.Value.x) * newPosition.y;
+        }
+
+        float expansionWeight = Mathf.Exp(-Mathf.Abs(newPositionLine) 
+        / maxDistanceToCenterLine * (1 - pathExpansionFactor) * 10);
+        float alignmentWeight = Mathf.Exp(-Mathf.Abs(startLine - newPositionLine) 
+        / maxDistanceToStartLine * (1 - pathIrregularityFactor) * 10);
+
+        float finalWeight = Mathf.Max(expansionWeight + alignmentWeight, 0.1f);
+
+        return Mathf.RoundToInt(finalWeight * 10);
     }
 
     private bool IsPositionValid(Vector2Int position)
@@ -209,6 +299,78 @@ public class Chunk: MonoBehaviour
         return true;
     }
 
+    public Vector2Int? GenerateSecondaryPath()
+    {
+        int secondaryPathStartIndex = pathPreview.Count;
+        int secondaryPathTries = 2; // The secondary path can't be the same as the last path.
+
+        // Remove the end edge from available sides to prevent backtracking
+        availableSides.Remove(endEdge);
+
+        // Attempt to find a valid starting point for the secondary path
+        PathPreviewData? startSecondaryPath = null;
+        while (startSecondaryPath == null && secondaryPathTries < pathPreview.Count)
+        {
+            if (iterationCount++ > iterationLimit)
+            {
+                throw new System.Exception("Infinite loop detected in secondary path start selection.");
+            }
+
+            startSecondaryPath = GetNextDataPath(pathPreview[^secondaryPathTries++]);
+        }
+
+        if (startSecondaryPath == null)
+        {
+            Debug.LogWarning("Secondary path generation failed: No starting point found.");
+            return null;
+        }
+
+        PathPreviewData currentSecondaryPath = startSecondaryPath.Value;
+
+        // Generate the secondary path
+        while (!secondaryPathEnded)
+        {
+            pathPreview.Add(currentSecondaryPath);
+            pathPreviewHashset.Add(currentSecondaryPath.position);
+
+            if (iterationCount++ > iterationLimit)
+            {
+                throw new System.Exception("Infinite loop detected in secondary path generation.");
+            }
+
+            if (CanEnd(currentSecondaryPath.position))
+            {
+                secondaryPathEnded = true;
+                secondaryPathEnd = currentSecondaryPath.position;
+                secondaryEndEdge = GetTileEdge(secondaryPathEnd.Value).Value;
+
+                break;
+            }
+
+            PathPreviewData? nextSecondaryPath = GetNextDataPath(currentSecondaryPath);
+
+            while (nextSecondaryPath == null)
+            {
+                if (iterationCount++ > iterationLimit)
+                {
+                    throw new System.Exception("Infinite loop detected in secondary path generation.");
+                }
+
+                if (pathPreview.Count == secondaryPathStartIndex){Debug.Log("Secondary path ended abruptly.");return null;}
+
+                // Backtrack if no valid path is found
+                BacktrackPath(currentSecondaryPath);
+
+                currentSecondaryPath = pathPreview[^1];
+                nextSecondaryPath = GetNextDataPath(currentSecondaryPath);
+            }
+
+            currentSecondaryPath = nextSecondaryPath.Value;
+        }
+
+        return secondaryPathEnd;
+    }
+
     public void FillChunk()
     {
         pathTiles = new Tile[pathPreview.Count];
@@ -259,11 +421,6 @@ public class Chunk: MonoBehaviour
         if (pathTile.y == chunkLimitsY.Min){return Vector2Int.down;}
 
         return null;
-    }
-
-    public Vector2Int GetEndEdge()
-    {
-        return GetTileEdge(pathEnd.Value).Value;
     }
 
     public Vector2Int RestartPathGenerated() //Restart the path generation from the middle of the chunk

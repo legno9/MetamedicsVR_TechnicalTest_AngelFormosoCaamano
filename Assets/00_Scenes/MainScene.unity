@@ -275,9 +275,12 @@ MonoBehaviour:
   meshesCombiner: {fileID: 317664663}
   terrainPrefab: {fileID: 3044635747522674541, guid: 9855bfa8f606c354c818c0d696c66c84, type: 3}
   pathPrefab: {fileID: 6483232364542597053, guid: 14c945722ac52204994767e1c1a926c6, type: 3}
-  chunkSize: {x: 20, y: 20}
-  numberOfChunks: 10
-  tryCombineAllChunks: 0
+  chunkSize: {x: 13, y: 13}
+  numberOfChunks: 100
+  CombineAllChunks: 0
+  SecondPathChance: 0.003
+  ExpansionFactor: 0.5
+  IrregularityFactor: 0.5
 --- !u!4 &317664661
 Transform:
   m_ObjectHideFlags: 0
