@@ -1,6 +1,4 @@
-# MetamedicsVR_TechnicalTest_AngelFormosoCaamano
-
-# Procedural Path Generation in Unity
+# Procedural Path Generation in Unity by Ángel Formoso Caamaño.
 
 This project demonstrates a procedural path generation system in Unity, designed to create dynamic and varied paths within a grid-based chunk system. The system is implemented using C# scripts and Unity's editor tools to allow for easy customization and testing.
 
